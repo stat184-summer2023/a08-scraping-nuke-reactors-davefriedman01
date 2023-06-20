@@ -1,49 +1,139 @@
 ---
-title: "Activity: Nuclear Reactors"
-author: "YOUR NAME HERE"
+title:  "Activity: Nuclear Reactors"
+author: "Dave Friedman"
+date:   "19 Jun 2023"
 output: html_notebook
 ---
 
 ```{r}
+library(lubridate)
+library(rvest)
 library(tidyverse)
 
+str_c('EXECUTED : ', now())
+sessionInfo()
 ```
 
 ## Scrape the Data 
 
 ```{r}
-#My code here.... 
+page      <- 'https://en.wikipedia.org/wiki/List_of_commerical_nuclear_reactors'
+tableList <-
+  page %>%
+    read_html() %>%
+    html_nodes(css = 'table') %>%
+    html_table(fill = TRUE)
+length(tableList)
 
+Japan <-
+  tableList[[21]] %>%
+    select(1:9)
+#names(Japan)[c(3, 6)] <- c('type', 'grossMW')
+head(Japan)
 
+Japan <-
+  Japan %>%
+    filter(row_number() > 1) %>%
+    rename(
+      name         = Plantname,
+      reactor      = `UnitNo.`,
+      type         = Type,
+      model        = Model,
+      status       = Status,
+      netMW        = `Capacity(MW)`,
+      construction = Beginbuilding,
+      operation    = Commercialoperation,
+      closure      = Closed
+    )
+head(Japan)
+
+str(Japan)
+
+Japan <-
+  Japan %>%
+    mutate(
+      netMW        = as.integer(netMW),
+      construction = lubridate::dmy(construction),
+      operation    = lubridate::dmy(operation),
+      closure      = lubridate::dmy(closure)
+    )
+head(Japan)
 ```
-
 
 ## Your turn: In what ways is the table tidy? How is it not tidy? What’s different about it from a tidy table?
 
-My answer here..... 
+Tidy Data Criteria
+* (i) rows (or cases, observations) must each represent the same underlying attribute (i.e., each observation must have its own row)
+* (ii) columns (or variables, values) must each contain the same type of value for each row (i.e., each variable must have its own column)
+* (iii) each value must have its own cell
+* It's impossible to only satisfy two of the three criteria. This implies the following.
+  * (i) put each dataset into a tibble
+  * (ii) put each variable into a column
 
+There is at least one row that does not represent a typical case (that is, the header row(s)). Certain columns are blank and need to be removed. The remaining columns may contain heterogeneous data formats or data types. And missing values must be addressed. But with some cleaning, the table hints at what a typical case should look like.
 
 ## Your Turn: Plot Net Generation Capacity vs Construction Date
 
 ```{r}
-#my code here 
-
-
+Japan %>%
+  ggplot(mapping = aes(x = construction, y = netMW)) +
+    geom_point(aes(color = type))
 ```
-
 
 ## Your Turn: Scrape & Clean China Data (then merge with Japan)
 
 ```{r}
-#my code here... 
+China <-
+  tableList[[10]] %>%
+    select(1:9)
+China <-
+  China %>%
+    filter(row_number() > 2) %>%
+    rename(
+      name         = Plantname,
+      reactor      = `UnitNo.`,
+      type         = Type,
+      model        = Model,
+      status       = Status,
+      netMW        = `Capacity(MW)`,
+      construction = Beginbuilding,
+      operation    = Commercialoperation,
+      closure      = Closed
+    )
+China <-
+  China %>%
+    mutate(
+      netMW        = as.integer(netMW),
+      construction = lubridate::dmy(construction),
+      operation    = lubridate::dmy(operation),
+      closure      = lubridate::dmy(closure)
+    )
+China %>%
+  ggplot(mapping = aes(x = construction, y = netMW)) +
+    geom_point(aes(color = type))
 
+bind_rows(Japan, China) %>%
+  mutate(Country = ifelse(name %in% unique(Japan$name), 'Japan', 'China')) %>%
+  head()
 ```
-
-
 
 ## Your Turn: Reconstruct Info Graphic of Japan Reactors (or other country of interest)
 
 ```{r}
-#My code here
-
+Japan %>%
+  mutate(
+    reactorID = paste(name, reactor),
+    time      = operation - construction
+  ) %>%
+  ggplot() +
+    geom_segment(
+      linewidth = 2,
+      mapping = aes(
+        x     = operation,
+        xend  = construction,
+        y     = reactorID,
+        yend  = reactorID,
+        color = type
+      )
+    )
 ```
